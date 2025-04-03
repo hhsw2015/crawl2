@@ -159,10 +159,8 @@ def crawl_torrent_pages(start_id, end_id):
         git_commit(f"Update data for IDs {batch_tasks[0]} to {batch_tasks[-1]}")
         logging.info(f"Processed and committed batch: IDs {batch_tasks[0]} to {batch_tasks[-1]}")
 
-    # Final commit if any remaining tasks were processed (shouldn't be needed with batching, but kept for safety)
-    if total_tasks % COMMIT_INTERVAL != 0:
-        git_commit(f"Final update for IDs {start_id} to {end_id}")
-
+    logging.info(f"Crawl completed for IDs {start_id} to {end_id}")
+    
 if __name__ == "__main__":
     logging.info("Starting crawl...")
     # Get start and end IDs from environment variables
