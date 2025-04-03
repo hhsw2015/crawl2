@@ -8,6 +8,8 @@ import sys
 import os
 import subprocess
 import logging
+import bencodepy
+import hashlib
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
@@ -27,7 +29,7 @@ def init_csv():
     if not os.path.exists(csv_file):
         with open(csv_file, mode='w', newline='', encoding='utf-8') as file:
             writer = csv.writer(file)
-            writer.writerow(["id", "title", "torrent_url"])
+            writer.writerow(["id", "title", "torrent_url", "magnet"])  # Added 'magnet' field
         logging.info("Initialized new CSV file")
 
 def git_commit(message):
@@ -57,6 +59,29 @@ def git_commit(message):
         logging.error(f"Git error: {e.stderr}")
         raise
 
+def torrent_to_magnet(torrent_url, retries=0):
+    """Convert torrent URL to magnet link"""
+    try:
+        response = requests.get(torrent_url, headers=headers, timeout=30)
+        response.raise_for_status()
+        torrent_data = bencodepy.decode(response.content)
+        info = bencodepy.encode(torrent_data[b"info"])
+        info_hash = hashlib.sha1(info).hexdigest()
+        magnet = f"magnet:?xt=urn:btih:{info_hash}"
+        return magnet
+    except (requests.RequestException, bencodepy.DecodingError) as e:
+        logging.error(f"Error converting {torrent_url} to magnet: {e}")
+        if retries < MAX_RETRIES:
+            logging.info(f"Retrying {torrent_url} ({retries + 1}/{MAX_RETRIES}) after {RETRY_DELAY} seconds...")
+            time.sleep(RETRY_DELAY)
+            return torrent_to_magnet(torrent_url, retries + 1)
+        else:
+            logging.error(f"Max retries reached for {torrent_url}. Returning N/A.")
+            return "N/A"
+    except Exception as e:
+        logging.error(f"Unexpected error converting {torrent_url}: {e}")
+        return "N/A"
+
 def crawl_page(t_id, retries=0):
     """Crawl a single page and extract required data"""
     url = f"https://www.ptorrents.com/dl.php?t={t_id}"
@@ -73,8 +98,11 @@ def crawl_page(t_id, retries=0):
         download_link = soup.find("a", class_="download-button")
         torrent_url = download_link["href"] if download_link and "href" in download_link.attrs else "N/A"
 
-        logging.info(f"Scraped ID {t_id}: {title}")
-        return {"id": t_id, "title": title, "torrent_url": torrent_url}
+        # Convert torrent URL to magnet link
+        magnet = torrent_to_magnet(torrent_url) if torrent_url != "N/A" else "N/A"
+
+        logging.info(f"Scraped ID {t_id}: {title} | Magnet: {magnet}")
+        return {"id": t_id, "title": title, "torrent_url": torrent_url, "magnet": magnet}
 
     except requests.RequestException as e:
         logging.error(f"Error fetching {url}: {e}")
@@ -84,10 +112,10 @@ def crawl_page(t_id, retries=0):
             return crawl_page(t_id, retries + 1)
         else:
             logging.error(f"Max retries reached for {url}. Marking as failed.")
-            return {"id": t_id, "title": "N/A", "torrent_url": "N/A"}
+            return {"id": t_id, "title": "N/A", "torrent_url": "N/A", "magnet": "N/A"}
     except Exception as e:
         logging.error(f"Unexpected error on {url}: {e}")
-        return {"id": t_id, "title": "N/A", "torrent_url": "N/A"}
+        return {"id": t_id, "title": "N/A", "torrent_url": "N/A", "magnet": "N/A"}
 
 def crawl_torrent_pages(start_id, end_id):
     """Crawl torrent pages using multiple threads and write to CSV in order"""
@@ -118,14 +146,14 @@ def crawl_torrent_pages(start_id, end_id):
                     results[index] = future.result()
                 except Exception as e:
                     logging.error(f"Error in future: {e}")
-                    results[index] = {"id": batch_tasks[index], "title": "N/A", "torrent_url": "N/A"}
+                    results[index] = {"id": batch_tasks[index], "title": "N/A", "torrent_url": "N/A", "magnet": "N/A"}
 
         # Write batch results to CSV (append mode ensures order)
         with open(csv_file, mode='a', newline='', encoding='utf-8') as file:
             writer = csv.writer(file)
             for result in results:
                 if result:  # Ensure result is not None
-                    writer.writerow([result["id"], result["title"], result["torrent_url"]])
+                    writer.writerow([result["id"], result["title"], result["torrent_url"], result["magnet"]])
 
         # Commit the batch to Git
         git_commit(f"Update data for IDs {batch_tasks[0]} to {batch_tasks[-1]}")
