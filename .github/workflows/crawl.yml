@@ -1,0 +1,52 @@
+name: Crawl Torrent Data
+
+on:
+  workflow_dispatch:
+    inputs:
+      start_id:
+        description: 'Start ID number (e.g., 1)'
+        required: true
+        default: '1'
+      end_id:
+        description: 'End ID number (e.g., 478443)'
+        required: true
+        default: '478443'
+
+permissions:
+  contents: write  # Grant write permissions for committing
+
+jobs:
+  crawl:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v3
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install requests beautifulsoup4 tqdm
+
+      - name: Configure Git
+        run: |
+          git config --global user.name "hhsw2015"
+          git config --global user.email "hhsw2015@gmail.com"
+
+      - name: Run crawler
+        env:
+          START_ID: ${{ github.event.inputs.start_id }}
+          END_ID: ${{ github.event.inputs.end_id }}
+        run: |
+          python crawler.py
+
+      - name: Commit and push changes
+        if: always()
+        run: |
+          git add torrent_data.csv
+          git commit -m "Final commit after crawl from ${{ github.event.inputs.start_id }} to ${{ github.event.inputs.end_id }}" || echo "No changes to commit"
+          git push || echo "Push failed, possibly no changes or permission issue"
