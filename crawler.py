@@ -123,7 +123,7 @@ def crawl_torrent_pages(start_id, end_id):
 if __name__ == "__main__":
     logging.info("Starting crawl...")
     # Get start and end IDs from environment variables
-    start_id = int(os.getenv("START_ID", "1"))
-    end_id = int(os.getenv("END_ID", "100"))
+    start_id = int(os.getenv("START_ID", 1))
+    end_id = int(os.getenv("END_ID", 100))
     crawl_torrent_pages(start_id, end_id)
     logging.info(f"Data saved to {csv_file}")
