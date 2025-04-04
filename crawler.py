@@ -18,7 +18,7 @@ headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36"
 }
 
-csv_file = "torrent_data.csv"
+csv_file = "torrent_data_1.csv"
 MAX_RETRIES = 3
 RETRY_DELAY = 5
 COMMIT_INTERVAL = 1000  # Commit every 1000 entries
